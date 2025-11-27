@@ -11,6 +11,7 @@ document.getElementById('schedulerForm').addEventListener('submit', async (e) =>
         num_jury_rooms: document.getElementById('numJuryRooms').value,
         matches_per_team: document.getElementById('matchesPerTeam').value,
         num_timeslots: document.getElementById('numTimeslots').value,
+        start_time: document.getElementById('startTime').value,
         match_duration: document.getElementById('matchDuration').value,
         jury_duration: document.getElementById('juryDuration').value,
         buffer_time: document.getElementById('bufferTime').value,
@@ -33,6 +34,7 @@ function createIssue(params) {
 - **Jury Rooms:** ${params.num_jury_rooms}
 - **Wedstrijden per team:** ${params.matches_per_team}
 - **Tijdsloten:** ${params.num_timeslots}
+- **Start tijd:** ${params.start_time}
 - **Wedstrijd duur:** ${params.match_duration} min
 - **Jury duur:** ${params.jury_duration} min
 - **Buffer tijd:** ${params.buffer_time} min
