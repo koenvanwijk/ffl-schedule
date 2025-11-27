@@ -37,10 +37,9 @@ function createIssue(params) {
     // URL encode the title and body
     const encodedTitle = encodeURIComponent(issueTitle);
     const encodedBody = encodeURIComponent(issueBody);
-    const encodedLabels = encodeURIComponent('schedule-request');
     
-    // Create GitHub issue URL
-    const issueUrl = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/issues/new?title=${encodedTitle}&body=${encodedBody}&labels=${encodedLabels}`;
+    // Create GitHub issue URL (without labels - wordt automatisch toegevoegd)
+    const issueUrl = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/issues/new?title=${encodedTitle}&body=${encodedBody}`;
     
     // Show success message with link
     const statusDiv = document.getElementById('status');
