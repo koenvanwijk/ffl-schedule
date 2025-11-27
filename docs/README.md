@@ -1,6 +1,34 @@
 # FLL Tournament Scheduler - Web Interface
 
-## Setup
+## 🚀 Gebruik (Geen GitHub account nodig!)
+
+### Eenvoudige Methode: Via Web Interface
+
+1. Open de website: `https://koenvanwijk.github.io/ffl-schedule/`
+2. Vul de toernooi configuratie in:
+   - Aantal teams
+   - Aantal tafels
+   - Aantal jury rooms
+   - Wedstrijden per team
+   - Tijdsloten
+3. Klik "Genereer Schema"
+4. Je wordt doorgeleid naar GitHub om een issue te maken
+5. Klik "Submit new issue"
+6. **De scheduler start automatisch!** ⚡
+7. Wacht 2-5 minuten
+8. Schema wordt als artifact toegevoegd aan het issue
+9. Download het schema
+
+### Hoe het werkt
+
+1. **Web form** → Genereert een GitHub issue met jouw parameters
+2. **GitHub Actions** → Detecteert het issue en start scheduler automatisch
+3. **Scheduler draait** → Genereert optimaal schema met constraint programming
+4. **Resultaat** → Schema wordt als artifact geüpload + comment in issue
+
+**Geen token, geen login nodig!** Werkt voor iedereen. ✅
+
+## 🔧 Setup (Eenmalig, voor repository owner)
 
 ### 1. Activeer GitHub Pages
 1. Ga naar je GitHub repository settings
@@ -11,46 +39,53 @@
 
 Je website is dan beschikbaar op: `https://koenvanwijk.github.io/ffl-schedule/`
 
-### 2. Maak een GitHub Personal Access Token
-De web interface heeft een token nodig om workflows te triggeren:
+### 2. Zorg dat GitHub Actions enabled is
+1. Ga naar Settings → Actions → General
+2. Zorg dat "Allow all actions and reusable workflows" is geselecteerd
+3. Save
 
-1. Ga naar GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
-2. Klik "Generate new token (classic)"
-3. Geef het een naam zoals "FLL Scheduler Web"
-4. Selecteer de volgende scopes:
-   - ✅ `repo` (Full control of private repositories)
-   - ✅ `workflow` (Update GitHub Action workflows)
-5. Klik "Generate token"
-6. **Kopieer de token** (je ziet hem maar 1x!)
+Dat is alles! De website is nu live en werkt automatisch. 🎉
 
-### 3. Gebruik de Web Interface
-1. Open de website
-2. Bij eerste gebruik: voer je GitHub token in
-3. Vul de toernooi configuratie in
-4. Klik "Genereer Schema"
-5. Wacht 2-5 minuten terwijl de scheduler draait
-6. Download het gegenereerde schema
+## 📋 Voor Meerdere Gebruikers
 
-## Security Note
-Je GitHub token wordt opgeslagen in localStorage in je browser. Deze is alleen zichtbaar voor jou. Deel je token nooit met anderen!
+Iedereen kan de website gebruiken zonder account:
+- ✅ Geen GitHub account nodig
+- ✅ Geen token nodig
+- ✅ Geen permissions nodig
+- ✅ Deel gewoon de website URL!
 
-## Hoe het werkt
-1. **Frontend** (docs/index.html) - Form voor configuratie
-2. **JavaScript** (docs/scheduler.js) - Triggert GitHub Actions via API
-3. **GitHub Actions** (.github/workflows/schedule.yml) - Draait Python scheduler
-4. **Artifact** - Gegenereerd schema wordt gedownload
+Issues worden automatisch aangemaakt en verwerkt.
+
+## 🎯 Alternatieve Methode: Handmatig via GitHub
+
+Als je liever direct in GitHub werkt:
+
+1. Ga naar "Issues" tab
+2. Klik "New Issue"
+3. Add label: `schedule-request`
+4. Vul de body in met parameters:
+   ```
+   ## Toernooi Configuratie
+   
+   - **Teams:** 40
+   - **Tafels:** 6  
+   - **Jury Rooms:** 8
+   - **Wedstrijden per team:** 4
+   - **Tijdsloten:** 40
+   ```
+5. Submit → Workflow start automatisch!
 
 ## Troubleshooting
 
-**"401 Unauthorized"**
-- Je token is ongeldig of verlopen
-- Maak een nieuw token aan
-- Clear localStorage en refresh de pagina
+**"Workflow start niet"**
+- Check of de issue het label `schedule-request` heeft
+- Controleer of GitHub Actions enabled is
 
-**"Workflow niet gestart"**
-- Check of `workflow_dispatch` is ingeschakeld in de workflow file
-- Controleer of je token de juiste permissions heeft
+**"Geen oplossing gevonden"**
+- Verhoog aantal tijdsloten (van 40 naar 50)
+- Verminder aantal teams
+- Voeg meer tafels/jury rooms toe
 
-**"Schema niet gegenereerd"**
-- Check GitHub Actions logs voor errors
-- Probeer met minder teams of meer tijdsloten
+**"Kan artifact niet downloaden"**
+- Artifacts vereisen GitHub login
+- Login en ga naar Actions → workflow run → Artifacts
