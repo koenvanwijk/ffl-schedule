@@ -97,21 +97,72 @@ def create_complete_schedule():
     for team in all_teams:
         for ts in all_match_timeslots:
             model.add_at_most_one(matches[(team, ts, table)] for table in all_tables)
+    
+    # 4. Twee teams mogen maximaal 1 keer tegen elkaar spelen
+    # Teams spelen tegen elkaar als ze op hetzelfde tijdslot op een tafel paar spelen
+    print("   └─ Unique opponents...")
+    
+    # Maak variabelen voor welke team paren tegen elkaar hebben gespeeld
+    team_matchups = {}
+    for team1 in all_teams:
+        for team2 in all_teams:
+            if team1 < team2:  # Voorkom duplicaten (team1, team2) == (team2, team1)
+                team_matchups[(team1, team2)] = model.new_int_var(0, MATCHES_PER_TEAM, 
+                    f'matchup_t{team1}_t{team2}')
+    
+    # Bereken hoe vaak elk team paar tegen elkaar speelt
+    if 'TABLE_PAIRS' in globals() and TABLE_PAIRS:
+        for team1 in all_teams:
+            for team2 in all_teams:
+                if team1 < team2:
+                    matchup_count = []
+                    # Voor elk tafel paar, check of beide teams daar tegelijk spelen
+                    for table1, table2 in TABLE_PAIRS:
+                        if table1 < NUM_TABLES and table2 < NUM_TABLES:
+                            for ts in all_match_timeslots:
+                                # Beide teams spelen op dit paar op dit tijdslot
+                                both_play = model.new_bool_var(f'both_t{team1}_t{team2}_ts{ts}_pair{table1}_{table2}')
+                                
+                                # team1 op table1 EN team2 op table2
+                                option1 = model.new_bool_var(f'opt1_t{team1}_t{team2}_ts{ts}_p{table1}_{table2}')
+                                model.add_bool_and([matches[(team1, ts, table1)], 
+                                                   matches[(team2, ts, table2)]]).only_enforce_if(option1)
+                                model.add_bool_or([matches[(team1, ts, table1)].Not(), 
+                                                  matches[(team2, ts, table2)].Not()]).only_enforce_if(option1.Not())
+                                
+                                # team1 op table2 EN team2 op table1
+                                option2 = model.new_bool_var(f'opt2_t{team1}_t{team2}_ts{ts}_p{table1}_{table2}')
+                                model.add_bool_and([matches[(team1, ts, table2)], 
+                                                   matches[(team2, ts, table1)]]).only_enforce_if(option2)
+                                model.add_bool_or([matches[(team1, ts, table2)].Not(), 
+                                                  matches[(team2, ts, table1)].Not()]).only_enforce_if(option2.Not())
+                                
+                                # both_play = option1 OR option2
+                                model.add_bool_or([option1, option2]).only_enforce_if(both_play)
+                                model.add_bool_and([option1.Not(), option2.Not()]).only_enforce_if(both_play.Not())
+                                
+                                matchup_count.append(both_play)
+                    
+                    # Totaal aantal keer dat team1 en team2 tegen elkaar spelen
+                    if matchup_count:
+                        model.add(sum(matchup_count) == team_matchups[(team1, team2)])
+                        # Maximaal 1 keer tegen elkaar spelen
+                        model.add(team_matchups[(team1, team2)] <= 1)
 
     # ===== CONSTRAINTS VOOR JURY SESSIES =====
     
-    # 4. Elk team heeft precies JURY_SESSIONS_PER_TEAM jury sessies
+    # 5. Elk team heeft precies JURY_SESSIONS_PER_TEAM jury sessies
     for team in all_teams:
         model.add(sum(jury_sessions[(team, ts, jr)] 
                      for ts in all_jury_timeslots 
                      for jr in all_jury_rooms) == JURY_SESSIONS_PER_TEAM)
 
-    # 5. Maximaal 1 team per jury room per tijdslot
+    # 6. Maximaal 1 team per jury room per tijdslot
     for ts in all_jury_timeslots:
         for jury_room in all_jury_rooms:
             model.add_at_most_one(jury_sessions[(team, ts, jury_room)] for team in all_teams)
     
-    # 5b. BELANGRIJK: Voorkom overlappende jury sessies in dezelfde room
+    # 6b. BELANGRIJK: Voorkom overlappende jury sessies in dezelfde room
     # Een jury op tijdslot J beslaat tijdsloten J t/m J+5 (42 min = 6 tijdsloten van 7 min)
     jury_duration_in_slots = (JURY_DURATION + MATCH_DURATION - 1) // MATCH_DURATION
     
@@ -128,12 +179,12 @@ def create_complete_schedule():
                                 jury_sessions[(team2, ts2, jury_room)] <= 1
                             )
 
-    # 6. Een team kan maar in 1 jury room per tijdslot zijn
+    # 7. Een team kan maar in 1 jury room per tijdslot zijn
     for team in all_teams:
         for ts in all_jury_timeslots:
             model.add_at_most_one(jury_sessions[(team, ts, jr)] for jr in all_jury_rooms)
     
-    # 6b. NIEUWE CONSTRAINT: Jury sessies beginnen in synchrone rondes
+    # 7b. NIEUWE CONSTRAINT: Jury sessies beginnen in synchrone rondes
     # Bereken hoeveel rondes nodig zijn (40 teams / 7 rooms = 6 rondes)
     import math
     num_jury_rounds = math.ceil(NUM_TEAMS / NUM_JURY_ROOMS)
@@ -159,7 +210,7 @@ def create_complete_schedule():
 
     # ===== CONSTRAINTS VOOR OVERLAP EN BUFFER =====
     
-    # 7. Voorkom overlap tussen matches en jury sessies
+    # 8. Voorkom overlap tussen matches en jury sessies
     # BEIDE gebruiken nu dezelfde tijdschaal: tijdslot * MATCH_DURATION
     # Match op tijdslot M: start = M*7, eind = M*7+7 (7 min)
     # Jury op tijdslot J: start = J*7, eind = J*7+42 (42 min, dus 6 tijdsloten lang)
@@ -186,7 +237,7 @@ def create_complete_schedule():
                     has_match = sum(matches[(team, match_ts, tb)] for tb in all_tables)
                     model.add(has_jury + has_match <= 1)
     
-    # 8. Buffer tijd tussen opeenvolgende matches
+    # 9. Buffer tijd tussen opeenvolgende matches
     print("   └─ Match spacing...")
     # We hebben minstens MINIMUM_BUFFER_TIME nodig TUSSEN twee matches
     # Als match 1 eindigt op tijd T, dan moet match 2 starten op T + MINIMUM_BUFFER_TIME
@@ -206,7 +257,7 @@ def create_complete_schedule():
                     has_match_at_next = sum(matches[(team, next_ts, tb)] for tb in all_tables)
                     model.add(has_match_at_ts + has_match_at_next <= 1)
     
-    # 9. Buffer tijd tussen opeenvolgende jury sessies (als team meer dan 1 heeft)
+    # 10. Buffer tijd tussen opeenvolgende jury sessies (als team meer dan 1 heeft)
     if JURY_SESSIONS_PER_TEAM > 1:
         print("   └─ Jury spacing...")
         # Rond naar boven
@@ -248,8 +299,8 @@ def create_complete_schedule():
                     
                     pair_violations.append(pair_mismatch)
     
-    # Preferentie: teams spelen op zo min mogelijk verschillende tafels
-    # Dit zorgt voor consistentie in tegenstanders
+    # Preferentie: teams spelen op zo VEEL mogelijk verschillende tafels
+    # Dit zorgt voor maximale variatie in tegenstanders
     tables_used = {}
     for team in all_teams:
         for table in all_tables:
@@ -260,15 +311,16 @@ def create_complete_schedule():
 
     # Gecombineerde optimalisatie doelen:
     # 1. HOOGSTE PRIORITEIT: Minimaliseer tafel paar violations (cost 1000)
-    # 2. TWEEDE PRIORITEIT: Minimaliseer aantal verschillende tafels per team (cost 1)
+    # 2. TWEEDE PRIORITEIT: MAXIMALISEER aantal verschillende tafels per team (negatieve cost = beloning)
     total_tables_used = sum(tables_used[(team, table)] for team in all_teams for table in all_tables)
     
     if 'pair_violations' in locals() and pair_violations:
-        # Tafel paren zijn VEEL belangrijker (cost 1000), dan pas tafel spreiding (cost 1)
-        model.minimize(sum(pair_violations) * 1000 + total_tables_used)
+        # Tafel paren zijn VEEL belangrijker (cost 1000)
+        # Meer tafels per team = beloning (negatieve cost -1 per extra tafel)
+        model.minimize(sum(pair_violations) * 1000 - total_tables_used)
     else:
-        # Alleen tafel spreiding minimaliseren
-        model.minimize(total_tables_used)
+        # Maximaliseer tafel spreiding (minimaliseer negatieve som)
+        model.minimize(-total_tables_used)
 
     # ===== OPLOSSEN =====
     

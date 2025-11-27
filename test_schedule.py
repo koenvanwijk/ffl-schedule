@@ -321,6 +321,59 @@ def test_table_pairs(data):
     return True
 
 
+def test_unique_opponents(data):
+    """Test of teams maximaal 1 keer tegen elkaar spelen"""
+    print("\n🔍 Test: Unique Opponents")
+    print("-" * 60)
+    
+    # Build tafel paren
+    TABLE_PAIRS = [(0, 1), (2, 3), (4, 5)]
+    
+    # Voor elk tijdslot, groepeer teams per tafel paar
+    timeslot_pairs = defaultdict(lambda: defaultdict(list))
+    
+    for alloc in data['teamTableAllocationList']:
+        team = alloc['team']['id']
+        ts_id = alloc['timeslot']['id']
+        ts_data = next(t for t in data['tableTimeslotList'] if t['id'] == ts_id)
+        table = ts_data['table']['id']
+        start_time = ts_data['startTime']
+        
+        # Check welk tafel paar deze tafel bij hoort
+        for pair_idx, (t1, t2) in enumerate(TABLE_PAIRS):
+            if table in (t1, t2):
+                timeslot_pairs[start_time][pair_idx].append((team, table))
+                break
+    
+    # Count matchups
+    matchups = defaultdict(int)
+    
+    for start_time, pairs in timeslot_pairs.items():
+        for pair_idx, teams_on_pair in pairs.items():
+            if len(teams_on_pair) == 2:
+                (team1, table1), (team2, table2) = teams_on_pair
+                team_pair = tuple(sorted([team1, team2]))
+                matchups[team_pair] += 1
+    
+    # Check violations
+    violations = [(pair, count) for pair, count in matchups.items() if count > 1]
+    
+    print(f'  Totaal unieke matchups: {len(matchups)}')
+    
+    if violations:
+        print(f'  ❌ {len(violations)} team paren spelen meer dan 1x tegen elkaar:')
+        for (t1, t2), count in sorted(violations, key=lambda x: -x[1])[:5]:
+            print(f'     Team {t1} vs Team {t2}: {count} keer')
+        if len(violations) > 5:
+            print(f'     ... +{len(violations) - 5} meer')
+        print(f'\n  ❌ FAILED: Teams spelen meerdere keren tegen elkaar')
+        return False
+    else:
+        print(f'  ✅ Alle matchups zijn uniek')
+        print(f'\n  ✅ PASSED: Geen team speelt meer dan 1x tegen dezelfde tegenstander')
+        return True
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: python test_schedule.py <schedule.json>")
@@ -348,6 +401,7 @@ def main():
     results.append(("Jury Room Overlaps", test_jury_room_overlaps(data)))
     results.append(("Team Constraints", test_team_constraints(data)))
     results.append(("Jury Synchronized Rounds", test_jury_synchronized_rounds(data)))
+    results.append(("Unique Opponents", test_unique_opponents(data)))
     results.append(("Table Preference", test_team_table_preference(data)))
     results.append(("Table Pairs", test_table_pairs(data)))
     
