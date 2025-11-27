@@ -7,7 +7,8 @@ Een complete planning tool voor First Lego League toernooien die gebruik maakt v
 ### Matches (Wedstrijden)
 - Plant **10-40 teams** over **4-10 tafels**
 - Elk team speelt **4 wedstrijden**
-- Teams spelen bij voorkeur op **dezelfde tafel** of maximaal 2 tafels
+- Teams spelen bij voorkeur op **verschillende tafels** voor maximale variatie
+- **Unieke tegenstanders**: elk team speelt maximaal 1x tegen dezelfde tegenstander
 - Wedstrijd duur: **7 minuten** (configureerbaar)
 - **Tafel paren**: tafels werken in paren (beide bezet of beide leeg)
 
@@ -86,6 +87,8 @@ Dit genereert een compleet JSON bestand met:
 - ✅ Alle wedstrijden (matches) per team
 - ✅ Alle jury sessies per team
 - ✅ Optimale timing met buffer tijd
+- ✅ Unieke tegenstanders (elk team speelt max 1x tegen zelfde tegenstander)
+- ✅ Maximum tafel variatie (teams spelen bij voorkeur op verschillende tafels)
 - ✅ Minimale tafelwisselingen
 
 ### Alternatieve Scripts
@@ -110,6 +113,8 @@ Dit controleert:
 - ✅ Minimale buffer tijd tussen activiteiten
 - ✅ Gesynchroniseerde jury rondes
 - ✅ Correcte tafel paar gebruik
+- ✅ Unieke tegenstanders (elk team max 1x tegen zelfde tegenstander)
+- ✅ Maximum tafel variatie (teams spelen op verschillende tafels)
 - ✅ Alle teams hebben juiste aantal matches en jury sessies
 
 ## 🤖 GitHub Actions
@@ -186,10 +191,14 @@ Branches: 5,346
 
 Totaal matches: 160
 Totaal jury sessies: 40
+Unieke tegenstanders: 78 matchups (0 herhalingen)
 
 Tafel verdeling:
-  Teams op 1 tafel: 40
-  Teams op 2 tafels: 0
+  Teams op 2 tafels: 3
+  Teams op 3 tafels: 11
+  Teams op 4 tafels: 26
+  
+Tafel paar gebruik: 96.6% correct
 
 💾 Schema opgeslagen als: schedule-complete-2025-11-27T14-27-53.json
 ```
