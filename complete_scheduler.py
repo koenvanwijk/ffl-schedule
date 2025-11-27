@@ -497,7 +497,7 @@ def print_summary(output, result):
         print("\n❌ GEEN OPLOSSING GEVONDEN!")
         print("\n💡 Suggesties:")
         print("   • Verhoog NUM_TIMESLOTS in config.py")
-        print("   • Verlaag MIN_GAP_BETWEEN_ACTIVITIES")
+        print("   • Verlaag MINIMUM_BUFFER_TIME (bijv. van 30 naar 20 min)")
         print("   • Verhoog MAX_SOLVE_TIME")
         return
     

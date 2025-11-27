@@ -15,7 +15,7 @@ NUM_JURY_ROOMS = 8
 NUM_TEAMS = 40
 
 # Aantal wedstrijden per team (standaard 4 voor FLL)
-MATCHES_PER_TEAM = 4
+MATCHES_PER_TEAM = 5
 
 # Duur van een wedstrijd in minuten
 MATCH_DURATION = 7
@@ -52,10 +52,6 @@ NUM_TIMESLOTS = 40  # Verhoog dit als er geen oplossing gevonden wordt
 
 # Aantal jury sessies per team (standaard 1)
 JURY_SESSIONS_PER_TEAM = 1
-
-# Minimaal aantal tijdsloten tussen activiteiten per team
-# 1 = minstens 1 tijdslot tussen elke wedstrijd/jury sessie
-MIN_GAP_BETWEEN_ACTIVITIES = 4  # Minimum buffer time in timeslots
 
 # ===== TIMING INSTELLINGEN =====
 
