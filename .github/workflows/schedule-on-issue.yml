@@ -1,0 +1,165 @@
+name: Schedule on Issue
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  check-and-schedule:
+    if: contains(github.event.issue.labels.*.name, 'schedule-request')
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Extract parameters from issue
+      id: params
+      run: |
+        # Parse issue body for parameters
+        BODY="${{ github.event.issue.body }}"
+        
+        NUM_TEAMS=$(echo "$BODY" | grep -oP '(?<=\*\*Teams:\*\* )\d+' || echo "40")
+        NUM_TABLES=$(echo "$BODY" | grep -oP '(?<=\*\*Tafels:\*\* )\d+' || echo "6")
+        NUM_JURY=$(echo "$BODY" | grep -oP '(?<=\*\*Jury Rooms:\*\* )\d+' || echo "8")
+        MATCHES=$(echo "$BODY" | grep -oP '(?<=\*\*Wedstrijden per team:\*\* )\d+' || echo "4")
+        TIMESLOTS=$(echo "$BODY" | grep -oP '(?<=\*\*Tijdsloten:\*\* )\d+' || echo "40")
+        
+        echo "num_teams=$NUM_TEAMS" >> $GITHUB_OUTPUT
+        echo "num_tables=$NUM_TABLES" >> $GITHUB_OUTPUT
+        echo "num_jury_rooms=$NUM_JURY" >> $GITHUB_OUTPUT
+        echo "matches_per_team=$MATCHES" >> $GITHUB_OUTPUT
+        echo "num_timeslots=$TIMESLOTS" >> $GITHUB_OUTPUT
+        
+        echo "Parsed parameters:"
+        echo "Teams: $NUM_TEAMS"
+        echo "Tables: $NUM_TABLES"
+        echo "Jury: $NUM_JURY"
+        echo "Matches: $MATCHES"
+        echo "Timeslots: $TIMESLOTS"
+    
+    - name: Add comment - Starting
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '🚀 Scheduler is gestart!\n\n⏳ Dit kan 2-5 minuten duren...'
+          })
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install ortools numpy pandas
+    
+    - name: Run scheduler
+      id: schedule
+      run: |
+        python run_scheduler_with_params.py \
+          --num-teams "${{ steps.params.outputs.num_teams }}" \
+          --num-tables "${{ steps.params.outputs.num_tables }}" \
+          --num-jury-rooms "${{ steps.params.outputs.num_jury_rooms }}" \
+          --matches-per-team "${{ steps.params.outputs.matches_per_team }}" \
+          --num-timeslots "${{ steps.params.outputs.num_timeslots }}"
+      continue-on-error: true
+    
+    - name: Find generated schedule
+      if: steps.schedule.outcome == 'success'
+      id: find_schedule
+      run: |
+        SCHEDULE_FILE=$(ls -t schedule-complete-*.json | head -1)
+        echo "schedule_file=$SCHEDULE_FILE" >> $GITHUB_OUTPUT
+        echo "Found schedule: $SCHEDULE_FILE"
+    
+    - name: Upload schedule artifact
+      if: steps.schedule.outcome == 'success'
+      uses: actions/upload-artifact@v4
+      with:
+        name: fll-schedule-issue-${{ github.event.issue.number }}
+        path: schedule-complete-*.json
+        retention-days: 30
+    
+    - name: Add comment - Success
+      if: steps.schedule.outcome == 'success'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const scheduleFile = '${{ steps.find_schedule.outputs.schedule_file }}';
+          const data = JSON.parse(fs.readFileSync(scheduleFile, 'utf8'));
+          
+          const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+          
+          const commentBody = `✅ **Schema succesvol gegenereerd!**
+            
+          ## 📊 Statistieken
+          - **Teams:** ${data.teamList.length}
+          - **Tafels:** ${data.tableList.length}
+          - **Jury Rooms:** ${data.juryList.length}
+          - **Totaal Matches:** ${data.teamTableAllocationList.length}
+          - **Totaal Jury Sessies:** ${data.teamJuryAllocationList.length}
+          
+          ## 📥 Download
+          Het schema is beschikbaar als artifact in de [workflow run](${runUrl}).
+          
+          Klik op "Summary" → scroll naar "Artifacts" → download \`ffl-schedule-issue-${{ github.event.issue.number }}\`
+          
+          ---
+          *Gegenereerd door FLL Tournament Scheduler*`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: commentBody
+          });
+          
+          // Close issue automatically
+          github.rest.issues.update({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'closed'
+          });
+    
+    - name: Add comment - Failure
+      if: steps.schedule.outcome == 'failure'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+          
+          const commentBody = `❌ **Geen oplossing gevonden**
+          
+          De scheduler kon geen geldig schema genereren met deze parameters.
+          
+          ## 💡 Suggesties:
+          - ✅ Verhoog het aantal tijdsloten (bijv. van 40 naar 50)
+          - ✅ Verlaag het aantal teams
+          - ✅ Voeg meer tafels of jury rooms toe
+          
+          Bekijk de [workflow logs](${runUrl}) voor meer details.
+          
+          Je kunt een nieuwe issue maken met aangepaste parameters.`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: commentBody
+          });
+          
+          // Add label
+          github.rest.issues.addLabels({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['failed']
+          });
