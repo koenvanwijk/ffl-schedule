@@ -12,7 +12,7 @@ NUM_TABLES = 8
 NUM_JURY_ROOMS = 7
 
 # Aantal teams (10-40)
-NUM_TEAMS = 45
+NUM_TEAMS = 40
 
 # Aantal wedstrijden per team (standaard 4 voor FLL)
 MATCHES_PER_TEAM = 4
@@ -25,7 +25,7 @@ JURY_DURATION = 42
 
 
 # Minimale buffer tijd tussen activiteiten in minuten
-MINIMUM_BUFFER_TIME = 30
+MINIMUM_BUFFER_TIME = 21
 
 # ===== PAUZE INSTELLINGEN =====
 
@@ -57,6 +57,11 @@ JURY_SESSIONS_PER_TEAM = 1
 
 # Start tijd van het toernooi
 START_TIME = "09:30"
+
+# Eind tijd van het toernooi (in minuten vanaf start tijd)
+# Alle events moeten voor deze tijd afgelopen zijn
+# None = geen eind tijd constraint (gebruik alle beschikbare tijdsloten)
+END_TIME = 252  # Bijvoorbeeld: 300 voor 5 uur (300 minuten vanaf start)
 
 # Maximale oplostijd in seconden
 MAX_SOLVE_TIME = 120
