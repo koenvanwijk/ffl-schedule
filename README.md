@@ -91,14 +91,11 @@ Dit genereert een compleet JSON bestand met:
 - ✅ Maximum tafel variatie (teams spelen bij voorkeur op verschillende tafels)
 - ✅ Minimale tafelwisselingen
 
-### Alternatieve Scripts
+### Scripts
 
-- **`complete_scheduler.py`** - 🎯 **AANBEVOLEN**: Complete scheduler met matches + jury sessies
+- **`complete_scheduler.py`** - 🎯 Complete scheduler met matches + jury sessies
 - **`test_schedule.py`** - Test suite voor schema validatie
-- **`generate_json.py`** - Alleen matches (geen jury), JSON output
-- **`run_scheduler.py`** - Alleen matches met CSV export
-- **`ffl_simple.py`** - Standalone versie met parameters in het script
-- **`quick_schedule.py`** - Command-line tool met argumenten
+- **`config.py`** - Configuratie voor toernooi instellingen
 
 ### Schema Testen
 
@@ -302,14 +299,8 @@ ffl-schedule/
 ├── config.py                    # ⚙️ Configuratie (pas dit aan!)
 ├── complete_scheduler.py        # 🎯 Complete scheduler (matches + jury)
 ├── test_schedule.py             # ✅ Test suite voor validatie
-├── generate_json.py             # 📝 Alleen matches, JSON output
-├── run_scheduler.py             # 🚀 Matches met CSV export
-├── ffl_simple.py                # 📝 Standalone versie
-├── quick_schedule.py            # ⌨️ Command-line tool
 ├── requirements.txt             # 📦 Dependencies
-├── schedule-complete-*.json     # 💾 Complete JSON output (gegenereerd)
-├── schedule-*.json              # 💾 Matches-only JSON (gegenereerd)
-├── ffl_schedule.csv             # 💾 CSV output (gegenereerd)
+├── schedule-complete-*.json     # 💾 Gegenereerd JSON schema
 └── README.md                    # 📖 Deze documentatie
 ```
 
