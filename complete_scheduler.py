@@ -36,6 +36,10 @@ def create_complete_schedule():
     print(f"   Wedstrijden per team: {MATCHES_PER_TEAM}")
     print(f"   Jury sessies per team: {JURY_SESSIONS_PER_TEAM}")
     print(f"   Min. buffer tijd: {MINIMUM_BUFFER_TIME} min")
+    if END_TIME is not None:
+        end_hours = END_TIME // 60
+        end_minutes = END_TIME % 60
+        print(f"   Eind tijd: {END_TIME} min ({end_hours}u{end_minutes:02d})")
     print(f"=" * 70 + "\n")
 
     # Capacity check
@@ -191,9 +195,10 @@ def create_complete_schedule():
     print(f"   └─ Jury rondes: {num_jury_rounds} (max {NUM_JURY_ROOMS} teams per ronde)")
     
     # Definieer welke tijdsloten gebruikt mogen worden voor jury start (beperkt aantal)
-    # Jury sessies mogen alleen starten op tijdslot 0, 7, 14, 21, etc. (elke 7 slots = 49 min)
-    # Dit geeft genoeg tijd tussen rondes (49 min > 42 min jury + minimale gap)
-    allowed_jury_start_slots = list(range(0, NUM_TIMESLOTS, 7))[:num_jury_rounds]
+    # Jury sessies mogen alleen starten op tijdslot 0, 6, 12, 18, etc. (elke 6 slots = 42 min)
+    # Dit zorgt ervoor dat jury sessies direct na elkaar aansluiten zonder pauze
+    # Een jury sessie duurt 6 tijdsloten (42 min), dus de volgende kan direct starten op +6
+    allowed_jury_start_slots = list(range(0, NUM_TIMESLOTS, jury_duration_in_slots))[:num_jury_rounds]
     
     # Elk team mag alleen een jury sessie starten op deze specifieke tijdsloten
     for team in all_teams:
@@ -269,6 +274,43 @@ def create_complete_schedule():
                     has_jury_at_next = sum(jury_sessions[(team, next_ts, jr)] for jr in all_jury_rooms)
                     model.add(has_jury_at_ts + has_jury_at_next <= 1)
 
+    # 11. END TIME CONSTRAINT: Alle events moeten voor END_TIME afgelopen zijn
+    if END_TIME is not None:
+        print(f"   └─ End time constraint: {END_TIME} minuten ({END_TIME // 60}u{END_TIME % 60:02d})")
+        
+        # Bereken de laatste toegestane timeslot voor matches
+        # Match op timeslot ts eindigt op: ts * MATCH_DURATION + MATCH_DURATION
+        # Dit moet <= END_TIME zijn, dus: ts * MATCH_DURATION + MATCH_DURATION <= END_TIME
+        # ts <= (END_TIME - MATCH_DURATION) / MATCH_DURATION
+        max_match_timeslot = (END_TIME - MATCH_DURATION) // MATCH_DURATION
+        
+        # Bereken de laatste toegestane timeslot voor jury sessies
+        # Jury op timeslot ts eindigt op: ts * MATCH_DURATION + JURY_DURATION
+        # Dit moet <= END_TIME zijn, dus: ts * MATCH_DURATION + JURY_DURATION <= END_TIME
+        # ts <= (END_TIME - JURY_DURATION) / MATCH_DURATION
+        max_jury_timeslot = (END_TIME - JURY_DURATION) // MATCH_DURATION
+        
+        print(f"      Max match timeslot: {max_match_timeslot} (eindt op {max_match_timeslot * MATCH_DURATION + MATCH_DURATION} min)")
+        print(f"      Max jury timeslot: {max_jury_timeslot} (eindt op {max_jury_timeslot * MATCH_DURATION + JURY_DURATION} min)")
+        
+        # Constraint: Geen matches na max_match_timeslot
+        for team in all_teams:
+            for ts in range(max_match_timeslot + 1, NUM_TIMESLOTS):
+                for table in all_tables:
+                    model.add(matches[(team, ts, table)] == 0)
+        
+        # Constraint: Geen jury sessies na max_jury_timeslot
+        for team in all_teams:
+            for ts in range(max_jury_timeslot + 1, NUM_TIMESLOTS):
+                for jury_room in all_jury_rooms:
+                    model.add(jury_sessions[(team, ts, jury_room)] == 0)
+        
+        # Waarschuwing als de constraint te restrictief is
+        if max_match_timeslot < 0:
+            print(f"      ⚠️  WARNING: END_TIME ({END_TIME} min) is te vroeg voor matches!")
+        if max_jury_timeslot < 0:
+            print(f"      ⚠️  WARNING: END_TIME ({END_TIME} min) is te vroeg voor jury sessies!")
+
     # ===== OPTIMALISATIE =====
     
     # Soft constraint: tafel paren zo vaak mogelijk beide bezet of beide leeg
@@ -309,18 +351,95 @@ def create_complete_schedule():
             model.add(sum(team_matches_on_table) >= 1).only_enforce_if(tables_used[(team, table)])
             model.add(sum(team_matches_on_table) == 0).only_enforce_if(tables_used[(team, table)].Not())
 
+    # Optimalisatie: Minimaliseer lege tijdsloten (maximaliseer tafel gebruik)
+    print("   └─ Minimaliseer lege tijdsloten en pack matches vroeg...")
+    empty_slots = []
+    latest_match_timeslot = model.new_int_var(0, NUM_TIMESLOTS - 1, 'latest_match_ts')
+    
+    for ts in all_match_timeslots:
+        for table in all_tables:
+            # empty_slot = 1 als deze tafel leeg is op dit tijdslot
+            empty_slot = model.new_bool_var(f'empty_ts{ts}_tb{table}')
+            # Er is een match op deze tafel/tijdslot
+            match_sum = sum(matches[(team, ts, table)] for team in all_teams)
+            # match_sum is 0 of 1 (door at_most_one constraint)
+            # empty_slot = 1 - match_sum
+            # We gebruiken: als match_sum == 0, dan empty_slot = 1
+            # Als match_sum == 1, dan empty_slot = 0
+            # Dit modelleren we met: empty_slot + match_sum == 1
+            # Maar match_sum is een expression, dus we gebruiken een intermediate variable
+            match_exists = model.new_int_var(0, 1, f'match_exists_ts{ts}_tb{table}')
+            model.add(match_exists == match_sum)
+            # empty_slot + match_exists == 1
+            empty_slot_as_int = model.new_int_var(0, 1, f'empty_int_ts{ts}_tb{table}')
+            model.add(empty_slot_as_int == empty_slot)
+            model.add(empty_slot_as_int + match_exists == 1)
+            empty_slots.append(empty_slot)
+            
+            # Track latest timeslot: als er een match is, dan latest_match_timeslot >= ts
+            for team in all_teams:
+                # Als match[(team, ts, table)] = 1, dan latest_match_timeslot >= ts
+                model.add(latest_match_timeslot >= ts).only_enforce_if(matches[(team, ts, table)])
+    
+    total_empty_slots = sum(empty_slots)
+    
+    # Extra optimalisatie: Prefer earlier timeslots (kleine penalty per timeslot)
+    # Dit helpt matches vroeg te packen en gaps te vullen
+    timeslot_penalties = []
+    for ts in all_match_timeslots:
+        for team in all_teams:
+            for table in all_tables:
+                # Penalty = ts als match gescheduled is, anders 0
+                # We maken een variable die ts is als match = 1, anders 0
+                penalty_var = model.new_int_var(0, ts, f'penalty_t{team}_ts{ts}_tb{table}')
+                # penalty_var = ts * matches[(team, ts, table)]
+                # Als match = 1, dan penalty_var = ts
+                # Als match = 0, dan penalty_var = 0
+                model.add(penalty_var == ts).only_enforce_if(matches[(team, ts, table)])
+                model.add(penalty_var == 0).only_enforce_if(matches[(team, ts, table)].Not())
+                timeslot_penalties.append(penalty_var)
+    total_timeslot_penalty = sum(timeslot_penalties)
+    
+    # NIEUWE optimalisatie: Bestraf lege slots die tussen matches vallen
+    # Dit voorkomt dat er grote gaten ontstaan tussen matches
+    # We bestraffen lege slots die tussen twee matches vallen (compactheid)
+    print("   └─ Compactheid optimalisatie...")
+    # De penalty voor lege slots is al verhoogd, maar we voegen een extra penalty toe
+    # voor lege slots die tussen matches vallen (dit wordt al gedekt door total_empty_slots)
+    # We verhogen gewoon de penalty voor lege slots verder
+
     # Gecombineerde optimalisatie doelen:
-    # 1. HOOGSTE PRIORITEIT: Minimaliseer tafel paar violations (cost 1000)
-    # 2. TWEEDE PRIORITEIT: MAXIMALISEER aantal verschillende tafels per team (negatieve cost = beloning)
+    # 1. HOOGSTE PRIORITEIT: Minimaliseer tafel paar violations (cost 100000)
+    # 2. TWEEDE PRIORITEIT: Minimaliseer lege tijdsloten (cost 10000) - ZEER VERHOOGD voor betere packing
+    # 3. DERDE PRIORITEIT: Minimaliseer laatste match timeslot (cost 50) - pack matches vroeg
+    # 4. VIERDE PRIORITEIT: Prefer earlier timeslots (cost 1 per timeslot) - pack vroeg
+    # 5. VIJFDE PRIORITEIT: MAXIMALISEER aantal verschillende tafels per team (negatieve cost = beloning)
     total_tables_used = sum(tables_used[(team, table)] for team in all_teams for table in all_tables)
     
     if 'pair_violations' in locals() and pair_violations:
-        # Tafel paren zijn VEEL belangrijker (cost 1000)
+        # Tafel paren zijn VEEL belangrijker (cost 100000)
+        # Lege slots zijn zeer belangrijk (cost 10000) - ZEER sterk verhoogd om gaten te voorkomen
+        # Pack matches vroeg (cost 50 per timeslot voor laatste match) - verhoogd
+        # Prefer earlier timeslots (cost 1 per timeslot per match)
         # Meer tafels per team = beloning (negatieve cost -1 per extra tafel)
-        model.minimize(sum(pair_violations) * 1000 - total_tables_used)
+        model.minimize(
+            sum(pair_violations) * 100000 + 
+            total_empty_slots * 10000 + 
+            latest_match_timeslot * 50 +
+            total_timeslot_penalty * 1 - 
+            total_tables_used
+        )
     else:
-        # Maximaliseer tafel spreiding (minimaliseer negatieve som)
-        model.minimize(-total_tables_used)
+        # Minimaliseer lege slots (cost 10000) - ZEER sterk verhoogd om gaten te voorkomen
+        # Pack matches vroeg (cost 50 per timeslot voor laatste match) - verhoogd
+        # Prefer earlier timeslots (cost 1 per timeslot per match)
+        # Maximaliseer tafel spreiding (negatieve cost -1)
+        model.minimize(
+            total_empty_slots * 10000 + 
+            latest_match_timeslot * 50 + 
+            total_timeslot_penalty * 1 - 
+            total_tables_used
+        )
 
     # ===== OPLOSSEN =====
     
@@ -368,6 +487,7 @@ def build_json_output(result):
             "constraintWeight": "1hard/0medium/0soft",
             "minimumBreakDuration": MINIMUM_BUFFER_TIME,
             "startTime": START_TIME,
+            "endTime": END_TIME,
             "breakStartTime": BREAK_START_TIME,
             "breakDuration": BREAK_DURATION,
             "matchDuration": MATCH_DURATION,
